@@ -164,7 +164,7 @@ int main() {
         // 4. Control the Tick Rate
         // Set to 30ms (~33 FPS) for a balanced standard run. 
         // Adjust this to 1ms or 150ms to generate your screen tearing / input lag data.
-        std::this_thread::sleep_for(std::chrono::milliseconds(30));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
     return 0;
