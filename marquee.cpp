@@ -203,4 +203,9 @@ This is where you bring the subsystems together and introduce time.
     The Mission: Create the master while(running) loop. Every tick, you will check your Phase 2 input drain, update the X and Y coordinates of your logo, enforce collision bounds based on your Phase 3 ioctl dimensions, render the frame, and then force the thread to sleep.
 
     The Test: This is where you manipulate the thread sleep duration to generate the data for your rubric (testing for screen tearing at 1ms vs. input lag at 150ms).
+
+
+The marquee app redraws in a loop and sleeps for a fixed amount of time between frames, so the keyboard polling rate is tied to that sleep duration. On my 144 Hz laptop panel, a 7 ms sleep is a good fit because it gives about 143 frames per second, which is very close to the monitor’s refresh period of about 6.94 ms per frame.
+Since the app uses ncurses to draw to the terminal, it is refreshed as a full frame rather than drawn incrementally, so classic screen tearing is not usually visible during the ASCII animation. In practice, changing the sleep duration mainly affects animation speed and input responsiveness. Around 33 ms gives roughly 30 Hz and is still usable, but typing starts to feel sluggish beyond that.
+
 */
