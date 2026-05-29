@@ -1,0 +1,5 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     '/Users/navi/Documents/School Stuff/CSOPESY Lessons/Marquee Console/main'
+relocations:     []
+...
