@@ -10,7 +10,6 @@
 #include <sys/select.h>
 #include <sys/ioctl.h>
 
-// --- Phase 1: Terminal Manipulation ---
 struct termios orig_termios;
 
 void disableRawMode() {
@@ -33,7 +32,6 @@ void enableRawMode() {
     std::cout << "\033[2J";     // Clear screen
 }
 
-// --- Bulletproof Non-Blocking Check ---
 bool kbhit() {
     struct timeval tv = { 0L, 0L };
     fd_set fds;
@@ -46,7 +44,6 @@ bool kbhit() {
 int main() {
     enableRawMode();
 
-    // --- Phase 2: State & Layout Initialization --- 
     std::vector<std::string> logo = {
         "  ____  _  _  ____   ",
         " (  _ \\( \\/ )(  _ \\  ",
@@ -66,23 +63,21 @@ int main() {
     const int max_history = 6; 
     bool running = true;
 
-    // --- Phase 3: The Core Rhythm ---
     while (running) {
 
-        // --- 0. Get Dynamic Screen Size ---
+        // Dynamic screen size
         struct winsize w;
         ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
         int current_width = w.ws_col;
         int current_height = w.ws_row;
 
-        // Dynamically calculate the marquee boundary
         int marquee_height = current_height - 8;
         
         // Prevent crashes if the user makes the window incredibly small
         if (current_width < logo_w + 2) current_width = logo_w + 2;
         if (marquee_height < logo_h + 2) marquee_height = logo_h + 2;
         
-        // 1. Poll Input using our traffic light (Draining the buffer)
+        // 1. Poll Input using the traffic light (Draining the buffer)
         while (kbhit()) { 
             char c;
             if (read(STDIN_FILENO, &c, 1) == 1) {
@@ -117,7 +112,7 @@ int main() {
         // 3. Render via 2D Frame Buffer
         std::vector<std::string> frame(current_height, std::string(current_width, ' '));
         
-        // --- DRAW THE HEADER ---
+        // Header
         std::string header = "| This is a Marquee Console! |";
         int header_x = (current_width - header.length()) / 2;
         if (header_x < 0) header_x = 0; 
@@ -152,8 +147,6 @@ int main() {
         for (size_t i = 0; i < frame.size(); ++i) {
             output_buffer += frame[i];
             
-            // CRITICAL FIX: Do not print a newline on the very last row.
-            // This prevents the terminal from automatically scrolling down.
             if (i < frame.size() - 1) {
                 output_buffer += "\n";
             }
@@ -162,9 +155,7 @@ int main() {
         std::cout << output_buffer << std::flush;
 
         // 4. Control the Tick Rate
-        // Set to 30ms (~33 FPS) for a balanced standard run. 
-        // Adjust this to 1ms or 150ms to generate your screen tearing / input lag data.
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        std::this_thread::sleep_for(std::chrono::milliseconds(30));
     }
 
     return 0;
@@ -172,6 +163,8 @@ int main() {
 
 
 /* 
+Explanations:
+
 Phase 1: The Terminal Hijack (termios.h)
 
 Your first goal is to rip control away from the default macOS terminal. You need to transition it from a canonical, line-buffered state (where it waits for 'Enter') into a raw, immediate state.
@@ -205,7 +198,27 @@ This is where you bring the subsystems together and introduce time.
     The Test: This is where you manipulate the thread sleep duration to generate the data for your rubric (testing for screen tearing at 1ms vs. input lag at 150ms).
 
 
-The marquee app redraws in a loop and sleeps for a fixed amount of time between frames, so the keyboard polling rate is tied to that sleep duration. On my 144 Hz laptop panel, a 7 ms sleep is a good fit because it gives about 143 frames per second, which is very close to the monitor’s refresh period of about 6.94 ms per frame.
-Since the app uses ncurses to draw to the terminal, it is refreshed as a full frame rather than drawn incrementally, so classic screen tearing is not usually visible during the ASCII animation. In practice, changing the sleep duration mainly affects animation speed and input responsiveness. Around 33 ms gives roughly 30 Hz and is still usable, but typing starts to feel sluggish beyond that.
+Explanations:
+
+The marquee app redraws in a loop and sleeps for a fixed amount of time between frames, so the keyboard polling rate is tied to that sleep duration. On my 120 Hz laptop panel, a 8.3 ms sleep is the best fit because it gives exactly 120 frames per second, which is very close to the monitor’s refresh period of about 8.33 ms per frame.
+In practice, changing the sleep duration mainly affects animation speed and input responsiveness. Around 33 ms gives roughly 30 Hz and is still usable, but typing starts to feel sluggish beyond that.
+
+Slide 1: Identifying Limits (The Polling Friction)
+
+    The Input Lag Threshold (High Delay): Pushing the thread delay above ~100ms introduces noticeable input latency. The polling mechanism (read()) is asleep for too long, causing rapid keystrokes to queue up in the OS buffer or drop entirely, resulting in a sluggish, unresponsive CLI.
+
+    The Simulation Threshold (Low Delay): Dropping the thread delay to 1ms (< 120Hz) over-saturates the tick rate. Instead of increasing visual fluidity, it artificially accelerates the application logic (the position vector updates too many times between physical monitor refreshes), making the animation uncontrollably fast.
+
+Slide 2: Architectural Observations (The Absence of Tearing)
+
+    Expected vs. Actual: While hardware limits usually result in visual screen tearing at 0ms delays, this implementation produced a tear-free output even at maximum CPU execution speeds.
+
+    The macOS Compositor Effect: The macOS WindowServer fundamentally prevents tearing by enforcing system-wide V-Sync and double-buffering. The application writes to a virtual buffer, and the OS orchestrates a clean swap to the physical display at a maximum of 120Hz (ProMotion limit), masking the visual artifacts typical of legacy console environments.
+
+Slide 3: Recommended Configuration (The Balance)
+
+    Target Tick Rate: 8.3ms to 33ms (equivalent to ~120 to ~30 FPS).
+
+    Justification: This range provides the optimal equilibrium. It is fast enough that the physics animation remains entirely smooth and visually distinct, yet leaves a small enough sleep window that the while(kbhit()) queue-draining mechanism can process human typing speeds instantaneously without perceived latency.
 
 */
